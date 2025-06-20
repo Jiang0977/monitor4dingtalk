@@ -455,23 +455,15 @@ case "${1:-install}" in
     "install")
         main
         ;;
-    "uninstall")
-        echo -e "${YELLOW}卸载Monitor4DingTalk...${NC}"
-        systemctl stop $APP_NAME || true
-        systemctl disable $APP_NAME || true
-        rm -f $SERVICE_FILE
-        rm -f /etc/logrotate.d/$APP_NAME
-        rm -rf $INSTALL_DIR
-        rm -rf $LOG_DIR
-        userdel $APP_USER || true
-        systemctl daemon-reload
-        echo -e "${GREEN}✅ 卸载完成${NC}"
-        ;;
     "help")
-        echo "用法: $0 [install|uninstall|help]"
-        echo "  install   - 安装Monitor4DingTalk (默认)"
-        echo "  uninstall - 卸载Monitor4DingTalk"
-        echo "  help      - 显示帮助信息"
+        echo "用法: $0 [install|help]"
+        echo "  install - 安装Monitor4DingTalk (默认)"
+        echo "  help    - 显示帮助信息"
+        echo ""
+        echo "其他可用脚本："
+        echo "  bash deploy/scripts/uninstall.sh     - 卸载Monitor4DingTalk"
+        echo "  bash deploy/scripts/test_python.sh   - 测试Python环境"
+        echo "  bash deploy/scripts/diagnose_systemd_issue.sh - 系统诊断"
         ;;
     *)
         echo "未知参数: $1"

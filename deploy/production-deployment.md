@@ -4,15 +4,16 @@
 
 ### 系统要求
 - **操作系统**: Linux (Ubuntu 18.04+, CentOS 7+, RHEL 8+)
-- **Python版本**: 3.8+
+- **Python版本**: 3.8+ (支持conda环境)
 - **内存**: 最小512MB，推荐1GB+
 - **磁盘空间**: 最小1GB，推荐5GB+
 - **网络**: 能访问钉钉API（oapi.dingtalk.com）
+- **权限**: 需要root权限进行系统级配置
 
 ### 环境检查
 ```bash
-# 检查Python版本
-python3 --version
+# 检查Python版本（推荐使用提供的测试脚本）
+bash deploy/scripts/test_python.sh
 
 # 检查网络连通性
 curl -I https://oapi.dingtalk.com
@@ -20,9 +21,40 @@ curl -I https://oapi.dingtalk.com
 # 检查系统资源
 free -h
 df -h
+
+# 如果有问题，运行系统诊断
+sudo bash deploy/scripts/diagnose_systemd_issue.sh
 ```
 
 ## 🚀 部署步骤
+
+### 方式一：自动化部署（推荐）
+
+**一键部署**，脚本会自动处理所有配置：
+
+```bash
+# 1. 确保在conda环境中（如果使用conda）
+conda activate base
+
+# 2. 使用自动化安装脚本
+sudo -E bash deploy/scripts/install.sh
+
+# 3. 如果遇到问题，查看帮助
+bash deploy/scripts/install.sh help
+```
+
+**脚本功能**：
+- ✅ 自动检测Python环境（支持conda）
+- ✅ 创建monitor用户和相关目录
+- ✅ 自动安装Python依赖
+- ✅ 配置systemd服务
+- ✅ 设置日志轮转
+- ✅ 创建管理脚本
+- ✅ 验证部署完整性
+
+### 方式二：手动部署
+
+如果需要更精细的控制，可以按以下步骤手动部署：
 
 ### 1. 创建专用用户
 ```bash
@@ -116,46 +148,29 @@ mkdir -p /opt/monitor4dingtalk/logs
 sudo vim /etc/systemd/system/monitor4dingtalk.service
 ```
 
-服务配置内容：
+**重要提示**：根据我们的部署经验，推荐使用以下**简化配置**来避免systemd执行问题：
+
 ```ini
 [Unit]
 Description=Monitor4DingTalk Server Resource Monitor
-Documentation=https://github.com/Jiang0977/monitor4dingtalk
-After=network-online.target
-Wants=network-online.target
+After=network.target
 
 [Service]
 Type=simple
-User=monitor
-Group=monitor
+User=root
 WorkingDirectory=/opt/monitor4dingtalk
-ExecStart=/usr/bin/python3 /opt/monitor4dingtalk/src/main.py
-ExecReload=/bin/kill -HUP $MAINPID
-
-# 重启策略
+ExecStart=/bin/bash -c 'cd /opt/monitor4dingtalk && /path/to/your/python src/main.py'
 Restart=always
 RestartSec=10
-StartLimitInterval=60
-StartLimitBurst=3
-
-# 资源限制
-LimitNOFILE=65536
-MemoryMax=256M
-
-# 安全设置
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/monitor4dingtalk /var/log/monitor4dingtalk
-
-# 环境变量
-Environment=PYTHONPATH=/opt/monitor4dingtalk
-Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+**注意**：
+- 使用`/bin/bash -c`包装执行命令避免203/EXEC错误
+- `/path/to/your/python`需要替换为实际的Python路径
+- 如果使用conda，路径通常是`/root/miniconda3/bin/python`
 
 ### 6. 启动和配置服务
 ```bash
@@ -314,28 +329,63 @@ if [ -n "$PID" ]; then
 fi
 ```
 
+## 🛠️ 可用工具脚本
+
+项目提供了4个核心管理脚本：
+
+| 脚本 | 功能 | 使用场景 |
+|------|------|----------|
+| `install.sh` | 自动化部署 | 🚀 初次部署或重新部署 |
+| `uninstall.sh` | 完全卸载 | 🗑️ 移除所有组件 |
+| `test_python.sh` | Python环境检测 | 🔍 诊断Python环境问题 |
+| `diagnose_systemd_issue.sh` | 系统诊断 | 🩺 全面问题排查 |
+
+### 使用示例
+```bash
+# 测试Python环境
+bash deploy/scripts/test_python.sh
+
+# 运行系统诊断
+sudo bash deploy/scripts/diagnose_systemd_issue.sh
+
+# 完全卸载（会提示确认）
+sudo bash deploy/scripts/uninstall.sh
+```
+
 ## 🔍 故障排除
 
 ### 常见问题和解决方案
 
-#### 1. 服务启动失败
+#### 1. systemd服务启动失败（203/EXEC错误）
+**症状**：服务显示`status=203/EXEC`错误
+
+**解决方案**：
 ```bash
-# 查看详细错误信息
-sudo journalctl -u monitor4dingtalk -n 50
+# 1. 运行系统诊断
+sudo bash deploy/scripts/diagnose_systemd_issue.sh
 
-# 检查配置文件语法
-python3 -c "import yaml; yaml.safe_load(open('config/config.yaml'))"
+# 2. 检查Python路径
+bash deploy/scripts/test_python.sh
 
-# 检查权限
-ls -la /opt/monitor4dingtalk/
-ls -la /var/log/monitor4dingtalk/
+# 3. 使用bash包装命令（已在自动化脚本中解决）
+# ExecStart=/bin/bash -c 'cd /opt/monitor4dingtalk && /your/python/path src/main.py'
 ```
 
-#### 2. 钉钉消息发送失败
+#### 2. conda环境问题
+**症状**：安装脚本检测到系统Python而非conda Python
+
+**解决方案**：
+```bash
+# 使用-E参数保持环境变量
+conda activate base
+sudo -E bash deploy/scripts/install.sh
+```
+
+#### 3. 钉钉消息发送失败
 ```bash
 # 测试钉钉连接
 cd /opt/monitor4dingtalk
-python3 src/main.py --test
+python src/main.py --test
 
 # 检查网络连通性
 curl -X POST "YOUR_WEBHOOK_URL" \
@@ -343,24 +393,25 @@ curl -X POST "YOUR_WEBHOOK_URL" \
   -d '{"msgtype": "text", "text": {"content": "test"}}'
 ```
 
-#### 3. 内存或CPU使用过高
+#### 4. 权限问题
 ```bash
-# 查看详细资源使用
-ps aux | grep monitor4dingtalk
-top -p $(pgrep -f monitor4dingtalk)
+# 检查文件权限
+ls -la /opt/monitor4dingtalk/
+ls -la /var/log/monitor4dingtalk/
 
-# 调整日志级别
-sed -i 's/level: "INFO"/level: "WARNING"/' config/config.yaml
-sudo systemctl reload monitor4dingtalk
+# 修复权限（如果需要）
+sudo chown -R monitor:monitor /opt/monitor4dingtalk
+sudo chmod +x /opt/monitor4dingtalk/src/main.py
 ```
 
-#### 4. 日志文件过大
+#### 5. 依赖库缺失
 ```bash
-# 手动轮转日志
-sudo logrotate -f /etc/logrotate.d/monitor4dingtalk
+# 重新安装依赖
+cd /opt/monitor4dingtalk
+pip install -r requirements.txt
 
-# 检查磁盘空间
-df -h /var/log
+# 验证依赖
+python -c "import psutil, yaml, requests, schedule; print('所有依赖正常')"
 ```
 
 ## 🔒 安全建议
@@ -424,42 +475,103 @@ fi
 
 ## 🎯 部署验证
 
-### 验证清单
-- [ ] 服务正常启动并运行
-- [ ] 日志文件正常写入
-- [ ] 钉钉连接测试通过
-- [ ] 监控数据采集正常
-- [ ] 告警功能测试通过
-- [ ] 开机自启动配置正确
-- [ ] 日志轮转配置生效
-- [ ] 资源使用在合理范围内
+### 快速验证
+使用自动化脚本部署后，系统会自动验证以下内容：
+- ✅ Python环境检测
+- ✅ 依赖库安装验证
+- ✅ 应用启动测试
+- ✅ 配置文件验证
+- ✅ systemd服务启动
 
-### 最终测试
+### 手动验证清单
+如果需要额外验证，可以检查：
+
 ```bash
 # 1. 服务状态检查
 sudo systemctl status monitor4dingtalk
 
-# 2. 功能测试
-cd /opt/monitor4dingtalk
-./start.sh test
-./start.sh once
+# 2. 查看运行日志
+sudo journalctl -u monitor4dingtalk -f
 
-# 3. 压力测试（可选）
+# 3. 功能测试
+cd /opt/monitor4dingtalk
+python src/main.py --test     # 测试钉钉连接
+python src/main.py --once     # 执行一次监控
+python src/main.py --status   # 查看系统状态
+
+# 4. 使用系统诊断脚本
+sudo bash deploy/scripts/diagnose_systemd_issue.sh
+```
+
+### 验证清单
+- [ ] ✅ 服务正常启动并运行
+- [ ] ✅ 日志文件正常写入
+- [ ] ✅ 钉钉连接测试通过
+- [ ] ✅ 监控数据采集正常
+- [ ] ✅ 告警功能测试通过
+- [ ] ✅ 开机自启动配置正确
+- [ ] ✅ 日志轮转配置生效
+- [ ] ✅ 资源使用在合理范围内
+
+### 压力测试（可选）
+```bash
 # 临时调低内存阈值触发告警
-sed -i 's/threshold: 85.0/threshold: 5.0/' config/config.yaml
+cp /opt/monitor4dingtalk/config/config.yaml /tmp/config.backup
+sed -i 's/threshold: 85.0/threshold: 5.0/' /opt/monitor4dingtalk/config/config.yaml
 sudo systemctl reload monitor4dingtalk
-# 观察告警是否正常发送，然后恢复配置
+
+# 观察告警发送，然后恢复配置
+cp /tmp/config.backup /opt/monitor4dingtalk/config/config.yaml
+sudo systemctl reload monitor4dingtalk
 ```
 
 ## 📞 技术支持
 
-如遇到部署问题，请收集以下信息：
+### 问题报告
+如遇到部署问题，请先运行系统诊断：
+```bash
+sudo bash deploy/scripts/diagnose_systemd_issue.sh > diagnosis.log 2>&1
+```
+
+然后收集以下信息：
+- 系统诊断报告: `diagnosis.log`
 - 系统版本: `cat /etc/os-release`
-- Python版本: `python3 --version`
+- Python环境: `bash deploy/scripts/test_python.sh`
 - 服务状态: `sudo systemctl status monitor4dingtalk`
-- 错误日志: `sudo journalctl -u monitor4dingtalk -n 100`
-- 配置文件: `cat config/config.yaml` (注意隐藏敏感信息)
+- 详细日志: `sudo journalctl -u monitor4dingtalk -n 100`
+- 配置文件: `cat /opt/monitor4dingtalk/config/config.yaml` (⚠️ 注意隐藏webhook_url和secret)
+
+### 常用维护命令
+```bash
+# 查看服务状态
+sudo systemctl status monitor4dingtalk
+
+# 重启服务
+sudo systemctl restart monitor4dingtalk
+
+# 查看实时日志
+sudo journalctl -u monitor4dingtalk -f
+
+# 测试功能
+cd /opt/monitor4dingtalk && python src/main.py --test
+
+# 运行系统诊断
+sudo bash deploy/scripts/diagnose_systemd_issue.sh
+
+# 完全重新部署
+sudo bash deploy/scripts/uninstall.sh
+sudo -E bash deploy/scripts/install.sh
+```
 
 ---
 
-🎉 **恭喜！您的Monitor4DingTalk生产环境部署完成！** 
+🎉 **恭喜！您的Monitor4DingTalk生产环境部署完成！**
+
+📋 **部署总结**：
+- ✅ 使用自动化脚本实现一键部署
+- ✅ 支持conda和系统Python环境
+- ✅ 解决了systemd 203/EXEC执行问题
+- ✅ 提供完整的故障诊断工具
+- ✅ 包含卸载和维护脚本
+
+🚀 **开始监控**：服务将自动开始监控服务器资源，当超过阈值时会发送钉钉告警消息。 
