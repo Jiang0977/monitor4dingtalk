@@ -387,24 +387,51 @@ EOF
 verify_deployment() {
     echo -e "${YELLOW}验证部署...${NC}"
     
-    # 检查应用是否能正常启动
-    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH src/main.py --version"
-    
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ 应用可以正常运行${NC}"
+    # 根据环境类型选择验证方式
+    if [[ "$PYTHON_FULL_PATH" == *"conda"* ]]; then
+        echo -e "${YELLOW}conda环境，使用root用户验证...${NC}"
+        
+        # 检查应用是否能正常启动
+        cd "$INSTALL_DIR" && $PYTHON_FULL_PATH src/main.py --version
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ 应用可以正常运行${NC}"
+        else
+            echo -e "${RED}❌ 应用无法正常运行${NC}"
+            exit 1
+        fi
+        
+        # 检查配置文件
+        cd "$INSTALL_DIR" && $PYTHON_FULL_PATH -c 'from src.services.config import config_manager; print("配置文件加载成功")'
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ 配置文件验证通过${NC}"
+        else
+            echo -e "${RED}❌ 配置文件验证失败${NC}"
+            exit 1
+        fi
     else
-        echo -e "${RED}❌ 应用无法正常运行${NC}"
-        exit 1
-    fi
-    
-    # 检查配置文件
-    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH -c 'from src.services.config import config_manager; print(\"配置文件加载成功\")'"
-    
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ 配置文件验证通过${NC}"
-    else
-        echo -e "${RED}❌ 配置文件验证失败${NC}"
-        exit 1
+        echo -e "${YELLOW}系统Python环境，使用monitor用户验证...${NC}"
+        
+        # 检查应用是否能正常启动
+        sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH src/main.py --version"
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ 应用可以正常运行${NC}"
+        else
+            echo -e "${RED}❌ 应用无法正常运行${NC}"
+            exit 1
+        fi
+        
+        # 检查配置文件
+        sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH -c 'from src.services.config import config_manager; print(\"配置文件加载成功\")'"
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ 配置文件验证通过${NC}"
+        else
+            echo -e "${RED}❌ 配置文件验证失败${NC}"
+            exit 1
+        fi
     fi
 }
 
