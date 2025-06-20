@@ -142,10 +142,49 @@ deploy_application() {
 install_dependencies() {
     echo -e "${YELLOW}安装Python依赖...${NC}"
     
-    # 切换到应用用户安装依赖
-    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD -m pip install --user -r requirements.txt"
+    # 首先升级pip到最新版本
+    echo -e "${YELLOW}升级pip...${NC}"
+    sudo -u "$APP_USER" bash -c "$PYTHON_CMD -m pip install --user --upgrade pip"
     
-    echo -e "${GREEN}✅ 依赖安装完成${NC}"
+    # 尝试安装依赖，如果失败则使用降级版本
+    echo -e "${YELLOW}安装项目依赖...${NC}"
+    if ! sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD -m pip install --user -r requirements.txt"; then
+        echo -e "${YELLOW}⚠️  使用标准版本要求安装失败，尝试使用兼容模式...${NC}"
+        
+        # 创建兼容版本的requirements文件
+        cat > "$INSTALL_DIR/requirements_compat.txt" << EOF
+# 兼容版本的依赖要求
+psutil>=5.0.0
+PyYAML>=3.13
+requests>=2.20.0
+schedule>=1.0.0
+pytest>=5.0.0
+pytest-cov>=2.8.0
+EOF
+        
+        # 使用兼容版本安装
+        sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD -m pip install --user -r requirements_compat.txt"
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ 使用兼容模式安装成功${NC}"
+        else
+            echo -e "${RED}❌ 依赖安装失败${NC}"
+            echo -e "${YELLOW}尝试手动安装核心依赖...${NC}"
+            sudo -u "$APP_USER" bash -c "$PYTHON_CMD -m pip install --user psutil PyYAML requests schedule"
+        fi
+    else
+        echo -e "${GREEN}✅ 依赖安装完成${NC}"
+    fi
+    
+    # 验证核心依赖是否安装成功
+    echo -e "${YELLOW}验证依赖安装...${NC}"
+    for pkg in psutil yaml requests schedule; do
+        if sudo -u "$APP_USER" bash -c "$PYTHON_CMD -c 'import $pkg' 2>/dev/null"; then
+            echo -e "${GREEN}  ✅ $pkg${NC}"
+        else
+            echo -e "${RED}  ❌ $pkg${NC}"
+        fi
+    done
 }
 
 # 配置系统服务
