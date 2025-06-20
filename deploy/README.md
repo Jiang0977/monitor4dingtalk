@@ -82,10 +82,45 @@ sudo bash deploy/scripts/simple_uninstall.sh
 - 系统管理员权限（sudo）
 - 网络连接（能访问钉钉API）
 
+## 配置说明
+
+编辑配置文件时，主要需要修改以下内容：
+
+```yaml
+# 钉钉机器人配置（必须配置）
+dingtalk:
+  webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN"
+  secret: "YOUR_SECRET_KEY"
+
+# 监控阈值（可选调整）
+monitor:
+  interval: 30        # 监控间隔（秒）
+  cpu:
+    threshold: 80.0   # CPU告警阈值（%）
+  memory:
+    threshold: 85.0   # 内存告警阈值（%）
+  disk:
+    threshold: 90.0   # 磁盘告警阈值（%）
+```
+
 ## 故障排查
 
-1. **服务启动失败**：检查Python环境和依赖是否正常安装
-2. **钉钉消息发送失败**：检查webhook_url和secret配置是否正确
+1. **服务启动失败**
+   ```bash
+   # 检查Python环境
+   bash deploy/scripts/check_env.sh
+   
+   # 查看详细错误
+   sudo journalctl -u monitor4dingtalk -n 20
+   ```
+
+2. **钉钉消息发送失败**
+   ```bash
+   # 测试钉钉连接
+   cd /opt/monitor4dingtalk
+   python3 src/main.py --test
+   ```
+
 3. **权限问题**：确保使用sudo权限运行安装脚本
 
 ## 文件位置
@@ -93,4 +128,18 @@ sudo bash deploy/scripts/simple_uninstall.sh
 - 应用目录：`/opt/monitor4dingtalk`
 - 配置文件：`/opt/monitor4dingtalk/config/config.yaml`
 - 日志文件：`/opt/monitor4dingtalk/logs/monitor.log`
-- 服务配置：`/etc/systemd/system/monitor4dingtalk.service` 
+- 服务配置：`/etc/systemd/system/monitor4dingtalk.service`
+
+## 高级配置
+
+### 日志轮转
+系统会自动管理日志文件，如需自定义可创建：
+```bash
+sudo vim /etc/logrotate.d/monitor4dingtalk
+```
+
+### 开机自启
+安装后服务会自动设置开机启动，如需禁用：
+```bash
+sudo systemctl disable monitor4dingtalk
+``` 
