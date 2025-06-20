@@ -42,20 +42,46 @@ check_requirements() {
         exit 1
     fi
     
-    # 检查Python版本
-    if ! command -v python3 &> /dev/null; then
-        echo -e "${RED}❌ Python3 未安装${NC}"
-        echo "请先安装Python3: apt install python3 python3-pip"
+    # 检查Python版本 - 尝试多个Python命令
+    PYTHON_CMD=""
+    for cmd in python3 python python3.10 python3.9 python3.8; do
+        if command -v "$cmd" &> /dev/null; then
+            # 检查版本是否满足要求
+            if $cmd -c "import sys; exit(0 if sys.version_info >= (3, 8) else 1)" &> /dev/null; then
+                PYTHON_CMD="$cmd"
+                break
+            fi
+        fi
+    done
+    
+    if [[ -z "$PYTHON_CMD" ]]; then
+        echo -e "${RED}❌ 未找到Python 3.8+版本${NC}"
+        echo "请安装Python 3.8或更高版本"
+        echo "当前系统可用的Python版本："
+        for cmd in python3 python python3.10 python3.9 python3.8; do
+            if command -v "$cmd" &> /dev/null; then
+                version=$($cmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "未知")
+                echo "  $cmd: $version"
+            fi
+        done
         exit 1
     fi
     
-    python_version=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-    if ! python3 -c "import sys; exit(0 if sys.version_info >= (3, 8) else 1)"; then
-        echo -e "${RED}❌ Python版本过低: $python_version (需要 >= 3.8)${NC}"
-        exit 1
-    fi
+    python_version=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    echo -e "${GREEN}✅ Python版本: $python_version (使用命令: $PYTHON_CMD)${NC}"
     
-    echo -e "${GREEN}✅ Python版本: $python_version${NC}"
+    # 检查pip是否可用
+    if ! $PYTHON_CMD -m pip --version &> /dev/null; then
+        echo -e "${YELLOW}⚠️  pip未安装或不可用，尝试安装...${NC}"
+        if command -v apt &> /dev/null; then
+            apt update && apt install -y python3-pip
+        elif command -v yum &> /dev/null; then
+            yum install -y python3-pip
+        else
+            echo -e "${RED}❌ 无法自动安装pip，请手动安装${NC}"
+            exit 1
+        fi
+    fi
     
     # 检查网络连通性
     if ! curl -s --max-time 10 https://oapi.dingtalk.com > /dev/null; then
@@ -63,6 +89,9 @@ check_requirements() {
     else
         echo -e "${GREEN}✅ 网络连通性正常${NC}"
     fi
+    
+    # 导出Python命令供其他函数使用
+    export PYTHON_CMD
 }
 
 # 创建用户和目录
@@ -114,7 +143,7 @@ install_dependencies() {
     echo -e "${YELLOW}安装Python依赖...${NC}"
     
     # 切换到应用用户安装依赖
-    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && pip3 install --user -r requirements.txt"
+    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD -m pip install --user -r requirements.txt"
     
     echo -e "${GREEN}✅ 依赖安装完成${NC}"
 }
@@ -122,6 +151,9 @@ install_dependencies() {
 # 配置系统服务
 setup_systemd_service() {
     echo -e "${YELLOW}配置系统服务...${NC}"
+    
+    # 获取Python完整路径
+    PYTHON_FULL_PATH=$(which $PYTHON_CMD)
     
     # 创建systemd服务文件
     cat > "$SERVICE_FILE" << EOF
@@ -136,7 +168,7 @@ Type=simple
 User=$APP_USER
 Group=$APP_USER
 WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/python3 $INSTALL_DIR/src/main.py
+ExecStart=$PYTHON_FULL_PATH $INSTALL_DIR/src/main.py
 ExecReload=/bin/kill -HUP \$MAINPID
 
 # 重启策略
@@ -269,7 +301,7 @@ verify_deployment() {
     echo -e "${YELLOW}验证部署...${NC}"
     
     # 检查应用是否能正常启动
-    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && python3 src/main.py --version"
+    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD src/main.py --version"
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ 应用可以正常运行${NC}"
@@ -279,7 +311,7 @@ verify_deployment() {
     fi
     
     # 检查配置文件
-    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && python3 -c 'from src.services.config import config_manager; print(\"配置文件加载成功\")'"
+    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD -c 'from src.services.config import config_manager; print(\"配置文件加载成功\")'"
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ 配置文件验证通过${NC}"
