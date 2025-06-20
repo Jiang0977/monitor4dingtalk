@@ -9,7 +9,7 @@ Type=simple
 User=monitor
 Group=monitor
 WorkingDirectory=/opt/monitor4dingtalk
-ExecStart=/usr/bin/python3 /opt/monitor4dingtalk/src/main.py
+ExecStart=/root/miniconda3/bin/python /opt/monitor4dingtalk/src/main.py
 ExecReload=/bin/kill -HUP $MAINPID
 
 # 重启策略
