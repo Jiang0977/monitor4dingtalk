@@ -42,14 +42,23 @@ check_requirements() {
         exit 1
     fi
     
-    # 检查Python版本 - 尝试多个Python命令
+    # 检查Python版本 - 尝试多个Python命令，优先使用当前环境的Python
     PYTHON_CMD=""
-    for cmd in python3 python python3.10 python3.9 python3.8; do
+    
+    # 首先尝试当前环境的python命令（conda环境优先）
+    for cmd in python python3 python3.10 python3.9 python3.8; do
         if command -v "$cmd" &> /dev/null; then
+            # 获取实际版本
+            version_info=$($cmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
+            echo "  检测到 $cmd: $version_info (路径: $(which $cmd))"
+            
             # 检查版本是否满足要求
-            if $cmd -c "import sys; exit(0 if sys.version_info >= (3, 8) else 1)" &> /dev/null; then
+            if $cmd -c "import sys; exit(0 if sys.version_info >= (3, 8) else 1)" &> /dev/null 2>&1; then
                 PYTHON_CMD="$cmd"
+                echo "  ✅ $cmd 满足版本要求"
                 break
+            else
+                echo "  ❌ $cmd 版本过低"
             fi
         fi
     done
@@ -142,13 +151,17 @@ deploy_application() {
 install_dependencies() {
     echo -e "${YELLOW}安装Python依赖...${NC}"
     
+    # 获取Python的完整路径
+    PYTHON_FULL_PATH=$(which $PYTHON_CMD)
+    echo -e "${YELLOW}使用Python: $PYTHON_FULL_PATH${NC}"
+    
     # 首先升级pip到最新版本
     echo -e "${YELLOW}升级pip...${NC}"
-    sudo -u "$APP_USER" bash -c "$PYTHON_CMD -m pip install --user --upgrade pip"
+    sudo -u "$APP_USER" bash -c "$PYTHON_FULL_PATH -m pip install --user --upgrade pip"
     
     # 尝试安装依赖，如果失败则使用降级版本
     echo -e "${YELLOW}安装项目依赖...${NC}"
-    if ! sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD -m pip install --user -r requirements.txt"; then
+    if ! sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH -m pip install --user -r requirements.txt"; then
         echo -e "${YELLOW}⚠️  使用标准版本要求安装失败，尝试使用兼容模式...${NC}"
         
         # 创建兼容版本的requirements文件
@@ -163,14 +176,14 @@ pytest-cov>=2.8.0
 EOF
         
         # 使用兼容版本安装
-        sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD -m pip install --user -r requirements_compat.txt"
+        sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH -m pip install --user -r requirements_compat.txt"
         
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✅ 使用兼容模式安装成功${NC}"
         else
             echo -e "${RED}❌ 依赖安装失败${NC}"
             echo -e "${YELLOW}尝试手动安装核心依赖...${NC}"
-            sudo -u "$APP_USER" bash -c "$PYTHON_CMD -m pip install --user psutil PyYAML requests schedule"
+            sudo -u "$APP_USER" bash -c "$PYTHON_FULL_PATH -m pip install --user psutil PyYAML requests schedule"
         fi
     else
         echo -e "${GREEN}✅ 依赖安装完成${NC}"
@@ -179,12 +192,15 @@ EOF
     # 验证核心依赖是否安装成功
     echo -e "${YELLOW}验证依赖安装...${NC}"
     for pkg in psutil yaml requests schedule; do
-        if sudo -u "$APP_USER" bash -c "$PYTHON_CMD -c 'import $pkg' 2>/dev/null"; then
+        if sudo -u "$APP_USER" bash -c "$PYTHON_FULL_PATH -c 'import $pkg' 2>/dev/null"; then
             echo -e "${GREEN}  ✅ $pkg${NC}"
         else
             echo -e "${RED}  ❌ $pkg${NC}"
         fi
     done
+    
+    # 导出完整路径供其他函数使用
+    export PYTHON_FULL_PATH
 }
 
 # 配置系统服务
@@ -340,7 +356,7 @@ verify_deployment() {
     echo -e "${YELLOW}验证部署...${NC}"
     
     # 检查应用是否能正常启动
-    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD src/main.py --version"
+    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH src/main.py --version"
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ 应用可以正常运行${NC}"
@@ -350,7 +366,7 @@ verify_deployment() {
     fi
     
     # 检查配置文件
-    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_CMD -c 'from src.services.config import config_manager; print(\"配置文件加载成功\")'"
+    sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH -c 'from src.services.config import config_manager; print(\"配置文件加载成功\")'"
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ 配置文件验证通过${NC}"
