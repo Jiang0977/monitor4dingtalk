@@ -168,13 +168,44 @@ install_dependencies() {
     PYTHON_FULL_PATH=$(which $PYTHON_CMD)
     echo -e "${YELLOW}使用Python: $PYTHON_FULL_PATH${NC}"
     
-    # 首先升级pip到最新版本
-    echo -e "${YELLOW}升级pip...${NC}"
-    sudo -u "$APP_USER" bash -c "$PYTHON_FULL_PATH -m pip install --user --upgrade pip"
-    
-    # 尝试安装依赖，如果失败则使用降级版本
-    echo -e "${YELLOW}安装项目依赖...${NC}"
-    if ! sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH -m pip install --user -r requirements.txt"; then
+    # 检查是否是conda环境，如果是则使用系统级安装
+    if [[ "$PYTHON_FULL_PATH" == *"conda"* ]]; then
+        echo -e "${YELLOW}检测到conda环境，使用系统级安装...${NC}"
+        
+        # 升级pip
+        echo -e "${YELLOW}升级pip...${NC}"
+        $PYTHON_FULL_PATH -m pip install --upgrade pip
+        
+        # 安装依赖
+        echo -e "${YELLOW}安装项目依赖...${NC}"
+        if ! $PYTHON_FULL_PATH -m pip install -r "$INSTALL_DIR/requirements.txt"; then
+            echo -e "${YELLOW}⚠️  使用标准版本要求安装失败，尝试兼容模式...${NC}"
+            $PYTHON_FULL_PATH -m pip install psutil PyYAML requests schedule
+        fi
+        
+        # 为monitor用户创建Python环境访问
+        echo -e "${YELLOW}为monitor用户配置Python环境...${NC}"
+        MONITOR_BIN="/home/monitor/bin"
+        mkdir -p "$MONITOR_BIN"
+        ln -sf "$PYTHON_FULL_PATH" "$MONITOR_BIN/python"
+        ln -sf "$PYTHON_FULL_PATH" "$MONITOR_BIN/python3"
+        chown -R monitor:monitor "/home/monitor"
+        
+        # 更新monitor用户的PATH
+        MONITOR_BASHRC="/home/monitor/.bashrc"
+        if ! grep -q "$MONITOR_BIN" "$MONITOR_BASHRC" 2>/dev/null; then
+            echo "export PATH=\"$MONITOR_BIN:\$PATH\"" >> "$MONITOR_BASHRC"
+            chown monitor:monitor "$MONITOR_BASHRC"
+        fi
+        
+    else
+        # 非conda环境，使用原有的用户级安装
+        echo -e "${YELLOW}升级pip...${NC}"
+        sudo -u "$APP_USER" bash -c "$PYTHON_FULL_PATH -m pip install --user --upgrade pip"
+        
+        # 尝试安装依赖，如果失败则使用降级版本
+        echo -e "${YELLOW}安装项目依赖...${NC}"
+        if ! sudo -u "$APP_USER" bash -c "cd $INSTALL_DIR && $PYTHON_FULL_PATH -m pip install --user -r requirements.txt"; then
         echo -e "${YELLOW}⚠️  使用标准版本要求安装失败，尝试使用兼容模式...${NC}"
         
         # 创建兼容版本的requirements文件
@@ -193,22 +224,33 @@ EOF
         
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✅ 使用兼容模式安装成功${NC}"
+            else
+                echo -e "${RED}❌ 依赖安装失败${NC}"
+                echo -e "${YELLOW}尝试手动安装核心依赖...${NC}"
+                sudo -u "$APP_USER" bash -c "$PYTHON_FULL_PATH -m pip install --user psutil PyYAML requests schedule"
+            fi
         else
-            echo -e "${RED}❌ 依赖安装失败${NC}"
-            echo -e "${YELLOW}尝试手动安装核心依赖...${NC}"
-            sudo -u "$APP_USER" bash -c "$PYTHON_FULL_PATH -m pip install --user psutil PyYAML requests schedule"
+            echo -e "${GREEN}✅ 依赖安装完成${NC}"
         fi
-    else
-        echo -e "${GREEN}✅ 依赖安装完成${NC}"
     fi
     
     # 验证核心依赖是否安装成功
     echo -e "${YELLOW}验证依赖安装...${NC}"
     for pkg in psutil yaml requests schedule; do
-        if sudo -u "$APP_USER" bash -c "$PYTHON_FULL_PATH -c 'import $pkg' 2>/dev/null"; then
-            echo -e "${GREEN}  ✅ $pkg${NC}"
+        if [[ "$PYTHON_FULL_PATH" == *"conda"* ]]; then
+            # conda环境，直接测试
+            if $PYTHON_FULL_PATH -c "import $pkg" 2>/dev/null; then
+                echo -e "${GREEN}  ✅ $pkg${NC}"
+            else
+                echo -e "${RED}  ❌ $pkg${NC}"
+            fi
         else
-            echo -e "${RED}  ❌ $pkg${NC}"
+            # 非conda环境，使用monitor用户测试
+            if sudo -u "$APP_USER" bash -c "$PYTHON_FULL_PATH -c 'import $pkg' 2>/dev/null"; then
+                echo -e "${GREEN}  ✅ $pkg${NC}"
+            else
+                echo -e "${RED}  ❌ $pkg${NC}"
+            fi
         fi
     done
     
@@ -223,42 +265,19 @@ setup_systemd_service() {
     # 获取Python完整路径
     PYTHON_FULL_PATH=$(which $PYTHON_CMD)
     
-    # 创建systemd服务文件
+    # 创建systemd服务文件（使用简化配置避免203/EXEC问题）
     cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=Monitor4DingTalk Server Resource Monitor
-Documentation=https://github.com/Jiang0977/monitor4dingtalk
-After=network-online.target
-Wants=network-online.target
+After=network.target
 
 [Service]
 Type=simple
-User=$APP_USER
-Group=$APP_USER
+User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$PYTHON_FULL_PATH $INSTALL_DIR/src/main.py
-ExecReload=/bin/kill -HUP \$MAINPID
-
-# 重启策略
+ExecStart=/bin/bash -c 'cd $INSTALL_DIR && $PYTHON_FULL_PATH src/main.py'
 Restart=always
 RestartSec=10
-StartLimitInterval=60
-StartLimitBurst=3
-
-# 资源限制
-LimitNOFILE=65536
-MemoryMax=256M
-
-# 安全设置
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=$INSTALL_DIR $LOG_DIR
-
-# 环境变量
-Environment=PYTHONPATH=$INSTALL_DIR
-Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
