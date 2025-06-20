@@ -3,6 +3,8 @@
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
+**[English](README_EN.md) | 中文**
+
 服务器资源监控钉钉告警系统 - 提供7×24小时服务器资源监控，及时发现系统异常并通过钉钉机器人推送告警信息。
 
 ## ✨ 功能特性
@@ -31,6 +33,10 @@ Monitor4DingTalk/
 │   └── main.py               # 程序入口
 ├── config/
 │   └── config.yaml           # 配置文件
+├── deploy/                   # 部署配置
+│   ├── scripts/              # 部署脚本
+│   ├── docker/               # Docker配置
+│   └── systemd/              # 系统服务配置
 ├── logs/                     # 日志目录
 └── requirements.txt          # 依赖管理
 ```
@@ -42,7 +48,7 @@ Monitor4DingTalk/
 - Python 3.8+
 - Linux/macOS/Windows (推荐Linux)
 
-### 安装
+### 开发环境安装
 
 1. **克隆项目**
 ```bash
@@ -80,26 +86,110 @@ dingtalk:
 #### 1. 测试钉钉连接
 ```bash
 python src/main.py --test
+# 或使用启动脚本
+./start.sh test
 ```
 
 #### 2. 查看系统状态
 ```bash
 python src/main.py --status
+# 或使用启动脚本
+./start.sh status
 ```
 
 #### 3. 执行一次监控检查
 ```bash
 python src/main.py --once
+# 或使用启动脚本
+./start.sh once
 ```
 
 #### 4. 启动监控服务
 ```bash
 python src/main.py
+# 或使用启动脚本
+./start.sh start
 ```
 
-#### 5. 后台运行（推荐）
+#### 5. 后台运行（开发环境）
 ```bash
 nohup python src/main.py > /dev/null 2>&1 &
+# 或使用启动脚本
+./start.sh daemon
+```
+
+## 📋 生产环境部署
+
+### 方式一：自动化脚本部署（推荐）
+
+```bash
+# 1. 下载项目代码
+git clone https://github.com/Jiang0977/monitor4dingtalk.git
+cd monitor4dingtalk
+
+# 2. 运行自动化部署脚本
+sudo bash deploy/scripts/install.sh
+
+# 3. 编辑配置文件
+sudo vim /opt/monitor4dingtalk/config/config.yaml
+
+# 4. 重启服务
+sudo systemctl restart monitor4dingtalk
+```
+
+### 方式二：手动部署
+
+详细的手动部署步骤请参考 [生产环境部署指南](deploy/production-deployment.md)
+
+### 方式三：Docker部署
+
+```bash
+# 1. 进入Docker目录
+cd deploy/docker
+
+# 2. 复制配置文件
+cp ../../config/config.yaml ./config.yaml
+
+# 3. 编辑配置文件
+vim config.yaml
+
+# 4. 启动容器
+docker-compose up -d
+
+# 5. 查看日志
+docker-compose logs -f
+```
+
+### 部署后验证
+
+```bash
+# 检查服务状态
+sudo systemctl status monitor4dingtalk
+
+# 测试功能
+cd /opt/monitor4dingtalk
+sudo -u monitor ./start.sh test
+sudo -u monitor ./start.sh once
+
+# 查看日志
+sudo journalctl -u monitor4dingtalk -f
+```
+
+### 常用管理命令
+
+```bash
+# 服务管理
+sudo systemctl start monitor4dingtalk     # 启动服务
+sudo systemctl stop monitor4dingtalk      # 停止服务
+sudo systemctl restart monitor4dingtalk   # 重启服务
+sudo systemctl status monitor4dingtalk    # 查看状态
+
+# 配置管理
+sudo systemctl reload monitor4dingtalk    # 重新加载配置
+
+# 日志查看
+sudo journalctl -u monitor4dingtalk -f    # 查看实时日志
+sudo journalctl -u monitor4dingtalk -n 100 # 查看最近100行日志
 ```
 
 ## ⚙️ 配置说明
@@ -149,14 +239,21 @@ alert:
     **告警级别**: {level}
 ```
 
+### 生产环境配置建议
+
+- **监控间隔**: 30-60秒（避免过于频繁）
+- **告警阈值**: CPU 80%、内存 85%、磁盘 90%
+- **去重窗口**: 10分钟（避免告警轰炸）
+- **日志级别**: INFO（生产环境）
+
 ## 📊 监控指标
 
-| 指标 | 说明 | 单位 | 默认阈值 |
-|------|------|------|----------|
-| CPU使用率 | 系统CPU平均使用率 | % | 80% |
-| 内存使用率 | 物理内存使用率 | % | 85% |
-| 磁盘使用率 | 指定路径磁盘使用率 | % | 90% |
-| 网络IO | 网络流量统计（规划中） | bytes/s | - |
+| 指标 | 说明 | 单位 | 默认阈值 | 生产环境建议 |
+|------|------|------|----------|--------------|
+| CPU使用率 | 系统CPU平均使用率 | % | 80% | 0-70%正常，>80%告警 |
+| 内存使用率 | 物理内存使用率 | % | 85% | 0-75%正常，>85%告警 |
+| 磁盘使用率 | 指定路径磁盘使用率 | % | 90% | 0-80%正常，>90%告警 |
+| 网络IO | 网络流量统计（规划中） | bytes/s | - | - |
 
 ## 🔧 命令行参数
 
@@ -185,55 +282,50 @@ python src/main.py [选项]
 tail -f logs/monitor.log
 ```
 
-## 🚀 系统服务部署
-
-### systemd服务配置
-
-创建服务文件 `/etc/systemd/system/monitor4dingtalk.service`：
-
-```ini
-[Unit]
-Description=Monitor4DingTalk Server Resource Monitor
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/path/to/monitor4dingtalk
-ExecStart=/usr/bin/python3 /path/to/monitor4dingtalk/src/main.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-启动和管理服务：
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable monitor4dingtalk
-sudo systemctl start monitor4dingtalk
-sudo systemctl status monitor4dingtalk
-```
-
 ## 🔍 故障排查
 
 ### 常见问题
 
 1. **钉钉消息发送失败**
+   ```bash
+   # 测试钉钉连接
+   ./start.sh test
+   # 或
+   python src/main.py --test
+   ```
    - 检查Webhook地址和secret配置
    - 确认网络连接正常
    - 查看日志文件中的错误信息
 
 2. **监控数据异常**
+   ```bash
+   # 查看系统状态
+   ./start.sh status
+   ```
    - 检查系统权限
    - 确认psutil库安装正确
    - 验证配置文件格式
 
 3. **服务无法启动**
+   ```bash
+   # 生产环境
+   sudo journalctl -u monitor4dingtalk -n 50
+   
+   # 开发环境
+   python src/main.py --status
+   ```
    - 检查Python版本和依赖
    - 确认配置文件路径正确
    - 查看详细错误日志
+
+4. **资源使用过高**
+   ```bash
+   # 生产环境
+   top -p $(pgrep -f monitor4dingtalk)
+   
+   # 调整日志级别
+   sed -i 's/level: "INFO"/level: "WARNING"/' config/config.yaml
+   ```
 
 ### 调试模式
 
@@ -242,6 +334,56 @@ sudo systemctl status monitor4dingtalk
 logging:
   level: "DEBUG"
 ```
+
+### 获取支持
+
+如遇到问题，请收集以下信息：
+- 系统版本: `cat /etc/os-release`
+- Python版本: `python3 --version`
+- 服务状态: `sudo systemctl status monitor4dingtalk` (生产环境)
+- 错误日志: `sudo journalctl -u monitor4dingtalk -n 100` (生产环境)
+- 配置文件: `cat config/config.yaml` (注意隐藏敏感信息)
+
+## 🚀 系统服务部署
+
+### systemd服务配置
+
+对于生产环境，推荐使用systemd服务：
+
+```bash
+# 使用自动化脚本部署
+sudo bash deploy/scripts/install.sh
+
+# 或手动配置服务
+sudo cp deploy/systemd/monitor4dingtalk.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable monitor4dingtalk
+sudo systemctl start monitor4dingtalk
+```
+
+## 📈 性能优化
+
+### 系统级优化
+- 调整系统文件句柄限制
+- 合理配置资源限制
+- 定期清理日志文件
+
+### 应用级优化
+- 适当调整监控间隔（30-60秒）
+- 合理设置告警去重时间窗口
+- 监控应用自身的资源使用
+
+## 🔒 安全建议
+
+### 文件权限
+- 保护配置文件权限 (600)
+- 使用专用用户运行服务
+- 设置正确的目录权限
+
+### 网络安全
+- 使用HTTPS连接钉钉API
+- 定期更新钉钉机器人secret
+- 监控异常网络请求
 
 ## 🤝 贡献指南
 
