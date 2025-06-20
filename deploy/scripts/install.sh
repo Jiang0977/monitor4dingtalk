@@ -27,7 +27,8 @@ echo -e "${BLUE}=================================================${NC}"
 check_root() {
     if [[ $EUID -ne 0 ]]; then
         echo -e "${RED}❌ 此脚本需要root权限运行${NC}"
-        echo "请使用: sudo $0"
+        echo "请使用: sudo -E $0  (保持环境变量)"
+        echo "或者: sudo PATH=\$PATH $0"
         exit 1
     fi
 }
@@ -40,6 +41,18 @@ check_requirements() {
     if [[ ! -f /etc/os-release ]]; then
         echo -e "${RED}❌ 不支持的操作系统${NC}"
         exit 1
+    fi
+    
+    # 如果是sudo环境，尝试恢复原用户的环境
+    if [[ -n "$SUDO_USER" ]]; then
+        echo -e "${YELLOW}检测到sudo环境，尝试恢复conda环境...${NC}"
+        # 尝试添加常见的conda路径
+        for conda_path in "/root/miniconda3/bin" "/root/anaconda3/bin" "/home/$SUDO_USER/miniconda3/bin" "/home/$SUDO_USER/anaconda3/bin" "/opt/conda/bin"; do
+            if [[ -d "$conda_path" ]]; then
+                export PATH="$conda_path:$PATH"
+                echo -e "${GREEN}✅ 添加conda路径: $conda_path${NC}"
+            fi
+        done
     fi
     
     # 检查Python版本 - 尝试多个Python命令，优先使用当前环境的Python
