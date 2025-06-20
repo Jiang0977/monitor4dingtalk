@@ -1,0 +1,15 @@
+# 系统资源监控核心库
+psutil>=5.9.0
+
+# 配置文件解析
+PyYAML>=6.0
+
+# HTTP请求处理
+requests>=2.28.0
+
+# 任务调度
+schedule>=1.2.0
+
+# 开发和测试工具
+pytest>=7.0.0
+pytest-cov>=4.0.0 

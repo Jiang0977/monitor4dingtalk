@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  monitor4dingtalk:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: monitor4dingtalk
+    restart: unless-stopped
+    
+    # 环境变量
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      # 可选：通过环境变量传递敏感配置
+      # - DINGTALK_WEBHOOK_URL=${DINGTALK_WEBHOOK_URL}
+      # - DINGTALK_SECRET=${DINGTALK_SECRET}
+    
+    # 挂载配置文件和日志目录
+    volumes:
+      - ./config.yaml:/app/config/config.yaml:ro
+      - monitor4dingtalk_logs:/var/log/monitor4dingtalk
+    
+    # 资源限制
+    mem_limit: 256m
+    mem_reservation: 128m
+    cpus: '0.5'
+    
+    # 网络模式 - host模式以便监控宿主机资源
+    network_mode: host
+    
+    # 安全配置
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "python3", "src/main.py", "--status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  monitor4dingtalk_logs:
+    driver: local 

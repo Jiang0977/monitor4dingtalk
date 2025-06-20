@@ -1,0 +1,62 @@
+# Monitor4DingTalk 生产环境配置文件
+# 请根据实际环境调整相关参数
+
+# 钉钉机器人配置
+dingtalk:
+  webhook_url: "YOUR_PRODUCTION_WEBHOOK_URL"  # 替换为您的钉钉机器人Webhook地址
+  secret: "YOUR_PRODUCTION_SECRET"  # 替换为您的钉钉机器人加密secret
+  timeout: 15  # 生产环境建议稍长的超时时间
+
+# 监控配置
+monitor:
+  interval: 30  # 生产环境建议30秒监控间隔
+  
+  # CPU监控配置
+  cpu:
+    enabled: true
+    threshold: 80.0  # CPU使用率告警阈值（百分比）
+    
+  # 内存监控配置
+  memory:
+    enabled: true
+    threshold: 85.0  # 内存使用率告警阈值（百分比）
+    
+  # 磁盘监控配置
+  disk:
+    enabled: true
+    threshold: 90.0  # 磁盘使用率告警阈值（百分比）
+    paths:  # 监控的磁盘路径
+      - "/"
+      - "/var"
+      - "/opt"
+      - "/home"
+      
+  # 网络监控配置（暂未实现）
+  network:
+    enabled: false
+    threshold: 1000000  # 网络IO告警阈值（bytes/s）
+
+# 告警配置
+alert:
+  # 告警去重时间窗口（秒）- 生产环境建议10分钟
+  dedup_window: 600
+  
+  # 告警消息模板
+  message_template: |
+    🚨 **生产环境服务器资源告警**
+    
+    **服务器**: {hostname}
+    **时间**: {timestamp}
+    **告警项**: {metric_name}
+    **当前值**: {current_value}
+    **告警阈值**: {threshold}
+    **告警级别**: {level}
+    
+    请立即处理！
+
+# 日志配置
+logging:
+  level: "INFO"  # 生产环境使用INFO级别，调试时可改为DEBUG
+  file: "/var/log/monitor4dingtalk/monitor.log"
+  max_size: 52428800  # 50MB - 更大的日志文件以保留更多历史
+  backup_count: 10    # 保留更多历史日志文件 

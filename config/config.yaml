@@ -1,0 +1,58 @@
+# Monitor4DingTalk 配置文件
+# 钉钉机器人配置
+dingtalk:
+  webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=YOUR_ACCESS_TOKEN"
+  secret: "YOUR_SECRET_KEY"  # 钉钉机器人的加密secret
+  timeout: 10  # 请求超时时间（秒）
+
+# 监控配置
+monitor:
+  interval: 60  # 监控间隔（秒）
+  
+  # CPU监控配置
+  cpu:
+    enabled: true
+    threshold: 80.0  # CPU使用率告警阈值（百分比）
+    
+  # 内存监控配置
+  memory:
+    enabled: true
+    threshold: 85.0  # 内存使用率告警阈值（百分比）
+    
+  # 磁盘监控配置
+  disk:
+    enabled: true
+    threshold: 90.0  # 磁盘使用率告警阈值（百分比）
+    paths:  # 监控的磁盘路径
+      - "/"
+      - "/home"
+      
+  # 网络监控配置
+  network:
+    enabled: false  # MVP阶段暂不开启
+    threshold: 1000000  # 网络IO告警阈值（bytes/s）
+
+# 告警配置
+alert:
+  # 告警去重时间窗口（秒）
+  dedup_window: 300
+  
+  # 告警消息模板
+  message_template: |
+    🚨 服务器资源告警
+    
+    **服务器**: {hostname}
+    **时间**: {timestamp}
+    **告警项**: {metric_name}
+    **当前值**: {current_value}
+    **告警阈值**: {threshold}
+    **告警级别**: {level}
+    
+    请及时处理！
+
+# 日志配置
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file: "logs/monitor.log"
+  max_size: 10485760  # 10MB
+  backup_count: 5 
