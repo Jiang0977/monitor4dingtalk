@@ -25,11 +25,13 @@ fi
 
 # 简单的Python检测
 PYTHON_CMD=""
+PYTHON_PATH=""
 for cmd in python3 python; do
     if command -v "$cmd" &>/dev/null; then
         version=$($cmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
         if [[ "$version" > "3.5" ]]; then
             PYTHON_CMD="$cmd"
+            PYTHON_PATH=$(which "$cmd")
             echo -e "${GREEN}✅ 使用Python: $cmd ($version)${NC}"
             break
         fi
@@ -69,15 +71,29 @@ fi
 echo -e "${YELLOW}创建系统服务...${NC}"
 cat > /etc/systemd/system/monitor4dingtalk.service << EOF
 [Unit]
-Description=Monitor4DingTalk
-After=network.target
+Description=Monitor4DingTalk Server Resource Monitor
+Documentation=https://github.com/Jiang0977/monitor4dingtalk
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$PYTHON_CMD $INSTALL_DIR/src/main.py
+ExecStart=$PYTHON_PATH $INSTALL_DIR/src/main.py
+ExecReload=/bin/kill -HUP \$MAINPID
+
+# 重启策略
 Restart=always
 RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# 资源限制
+LimitNOFILE=65536
+
+# 环境变量
+Environment=PYTHONPATH=$INSTALL_DIR
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
