@@ -26,6 +26,10 @@ sudo bash deploy/scripts/simple_install.sh
 
 # 或使用原安装脚本
 sudo bash deploy/scripts/install.sh
+
+# 如果使用conda环境（推荐）
+conda activate your_env  # 先激活conda环境
+sudo -E bash deploy/scripts/install_conda.sh
 ```
 
 ### 3. 配置钉钉
@@ -106,9 +110,56 @@ monitor:
     threshold: 90.0   # 磁盘告警阈值（%）
 ```
 
+## Conda环境部署
+
+如果您的生产环境使用conda管理Python环境，请按以下步骤操作：
+
+### 1. 准备conda环境
+```bash
+# 检查当前conda环境
+conda info --envs
+
+# 激活您想要使用的conda环境
+conda activate your_env_name
+
+# 确认Python版本
+python --version
+```
+
+### 2. 安装应用
+```bash
+# 使用专门的conda安装脚本
+sudo -E bash deploy/scripts/install_conda.sh
+```
+
+### 3. 验证安装
+```bash
+# 检查服务状态
+sudo systemctl status monitor4dingtalk
+
+# 手动测试
+cd /opt/monitor4dingtalk
+sudo -u monitor python src/main.py --test
+```
+
+### 注意事项
+- 使用 `sudo -E` 保持环境变量
+- 确保conda环境在安装时处于激活状态
+- 如果conda安装路径不是默认的 `/root/miniconda3`，需要修改 `start_conda.sh` 脚本
+
 ## 故障排查
 
-1. **服务启动失败**
+1. **Python版本检测失败**
+   ```bash
+   # 查看系统中所有Python版本
+   which -a python python3
+   
+   # 测试Python版本
+   python -c "import sys; print(sys.version)"
+   python3 -c "import sys; print(sys.version)"
+   ```
+
+2. **服务启动失败**
    ```bash
    # 检查Python环境
    bash deploy/scripts/check_env.sh
@@ -117,14 +168,24 @@ monitor:
    sudo journalctl -u monitor4dingtalk -n 20
    ```
 
-2. **钉钉消息发送失败**
+3. **钉钉消息发送失败**
    ```bash
    # 测试钉钉连接
    cd /opt/monitor4dingtalk
    python3 src/main.py --test
    ```
 
-3. **权限问题**：确保使用sudo权限运行安装脚本
+4. **Conda环境问题**
+   ```bash
+   # 检查conda环境是否正确激活
+   echo $CONDA_DEFAULT_ENV
+   which python
+   
+   # 重新创建启动脚本
+   sudo vim /opt/monitor4dingtalk/start_conda.sh
+   ```
+
+5. **权限问题**：确保使用sudo权限运行安装脚本
 
 ## 文件位置
 

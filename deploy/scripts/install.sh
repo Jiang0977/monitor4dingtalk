@@ -23,23 +23,48 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# 简单的Python检测
+# 改进的Python检测逻辑
 PYTHON_CMD=""
 PYTHON_PATH=""
-for cmd in python3 python; do
+
+# 检测函数：验证Python版本是否>=3.6
+check_python_version() {
+    local cmd="$1"
     if command -v "$cmd" &>/dev/null; then
-        version=$($cmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
-        if [[ "$version" > "3.5" ]]; then
-            PYTHON_CMD="$cmd"
-            PYTHON_PATH=$(which "$cmd")
-            echo -e "${GREEN}✅ 使用Python: $cmd ($version)${NC}"
-            break
+        # 获取Python版本并检查是否>=3.6
+        if $cmd -c "import sys; assert sys.version_info >= (3, 6), 'Python 3.6+ required'" 2>/dev/null; then
+            return 0
         fi
+    fi
+    return 1
+}
+
+# 优先检查python3，然后检查python
+for cmd in python3 python; do
+    if check_python_version "$cmd"; then
+        PYTHON_CMD="$cmd"
+        PYTHON_PATH=$(which "$cmd")
+        version=$($cmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')" 2>/dev/null || echo "unknown")
+        echo -e "${GREEN}✅ 使用Python: $cmd (版本: $version)${NC}"
+        break
     fi
 done
 
 if [[ -z "$PYTHON_CMD" ]]; then
-    echo -e "${RED}❌ 需要Python 3.6+${NC}"
+    echo -e "${RED}❌ 未找到符合要求的Python版本 (需要Python 3.6+)${NC}"
+    echo ""
+    echo "当前系统中的Python版本："
+    for cmd in python3 python python3.6 python3.7 python3.8 python3.9 python3.10 python3.11 python3.12; do
+        if command -v "$cmd" &>/dev/null; then
+            version=$($cmd --version 2>/dev/null || echo "未知版本")
+            echo "  $cmd: $version"
+        fi
+    done
+    echo ""
+    echo "解决方案："
+    echo "1. 确保已安装Python 3.6+: yum install python3 或 apt install python3"
+    echo "2. 如果使用conda环境，请确保已激活: conda activate your_env"
+    echo "3. 或手动指定Python路径: PYTHON_CMD=/path/to/python $0"
     exit 1
 fi
 
