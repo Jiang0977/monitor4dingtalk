@@ -203,6 +203,12 @@ dingtalk:
   secret: "你的加密secret"
   timeout: 10
 
+# 服务器信息配置
+server:
+  ip_mode: "auto"           # IP获取模式：auto/public/private/manual
+  manual_ip: ""             # 手动指定的IP地址
+  public_ip_timeout: 5      # 外网IP获取超时时间（秒）
+
 # 监控配置
 monitor:
   interval: 60  # 监控间隔（秒）
@@ -240,12 +246,20 @@ alert:
     **告警级别**: {level}
 ```
 
+### IP地址获取模式说明
+
+- **auto（自动模式）**: 先尝试获取外网IP，失败则使用内网IP（推荐）
+- **public（强制外网IP）**: 仅获取外网IP，无法获取则报错
+- **private（强制内网IP）**: 仅获取内网IP
+- **manual（手动指定）**: 使用配置文件中手动指定的IP地址
+
 ### 生产环境配置建议
 
 - **监控间隔**: 30-60秒（避免过于频繁）
 - **告警阈值**: CPU 80%、内存 85%、磁盘 90%
 - **去重窗口**: 10分钟（避免告警轰炸）
 - **日志级别**: INFO（生产环境）
+- **IP模式**: auto（推荐）或 public（如需外网IP）
 
 ## 📊 监控指标
 

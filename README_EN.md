@@ -203,6 +203,12 @@ dingtalk:
   secret: "Your encryption secret"
   timeout: 10
 
+# Server information configuration
+server:
+  ip_mode: "auto"           # IP acquisition mode: auto/public/private/manual
+  manual_ip: ""             # Manually specified IP address
+  public_ip_timeout: 5      # Public IP acquisition timeout (seconds)
+
 # Monitoring configuration
 monitor:
   interval: 60  # Monitoring interval (seconds)
@@ -240,12 +246,20 @@ alert:
     **Alert Level**: {level}
 ```
 
+### IP Address Acquisition Mode Description
+
+- **auto (Auto Mode)**: Try to get public IP first, use private IP if failed (recommended)
+- **public (Force Public IP)**: Only get public IP, error if unable to obtain
+- **private (Force Private IP)**: Only get private IP
+- **manual (Manual Specification)**: Use manually specified IP address in configuration
+
 ### Production Environment Configuration Recommendations
 
 - **Monitoring Interval**: 30-60 seconds (avoid too frequent)
 - **Alert Thresholds**: CPU 80%, Memory 85%, Disk 90%
 - **Deduplication Window**: 10 minutes (avoid alert bombardment)
 - **Log Level**: INFO (production environment)
+- **IP Mode**: auto (recommended) or public (if public IP needed)
 
 ## 📊 Monitoring Metrics
 

@@ -116,6 +116,10 @@ class ConfigManager:
         """获取日志配置"""
         return self.get('logging', {})
     
+    def get_server_config(self) -> Dict[str, Any]:
+        """获取服务器配置"""
+        return self.get('server', {})
+    
     def reload_config(self) -> None:
         """重新加载配置文件"""
         self.load_config()

@@ -164,10 +164,105 @@ class DingTalkNotifier:
     
     def _get_server_ip(self) -> str:
         """
-        获取服务器IP地址
+        获取服务器IP地址（支持外网IP）
         
         Returns:
             服务器IP地址
+        """
+        server_config = config_manager.get_server_config()
+        ip_mode = server_config.get('ip_mode', 'auto')
+        
+        # 手动指定IP模式
+        if ip_mode == 'manual':
+            manual_ip = server_config.get('manual_ip', '').strip()
+            if manual_ip:
+                logger_manager.debug(f"使用手动指定的IP地址: {manual_ip}")
+                return manual_ip
+            else:
+                logger_manager.warning("手动IP模式但未指定IP地址，切换到自动模式")
+                ip_mode = 'auto'
+        
+        # 强制获取外网IP
+        if ip_mode == 'public':
+            public_ip = self._get_public_ip()
+            if public_ip:
+                return public_ip
+            else:
+                logger_manager.warning("无法获取外网IP，切换到内网IP")
+                return self._get_private_ip()
+        
+        # 强制获取内网IP
+        if ip_mode == 'private':
+            return self._get_private_ip()
+        
+        # 自动模式：先尝试外网IP，失败则用内网IP
+        if ip_mode == 'auto':
+            public_ip = self._get_public_ip()
+            if public_ip:
+                logger_manager.debug(f"获取到外网IP: {public_ip}")
+                return public_ip
+            else:
+                private_ip = self._get_private_ip()
+                logger_manager.debug(f"外网IP获取失败，使用内网IP: {private_ip}")
+                return private_ip
+        
+        # 默认返回内网IP
+        return self._get_private_ip()
+    
+    def _get_public_ip(self) -> str:
+        """
+        获取外网IP地址
+        
+        Returns:
+            外网IP地址，获取失败返回空字符串
+        """
+        server_config = config_manager.get_server_config()
+        services = server_config.get('public_ip_services', [
+            "https://ipv4.icanhazip.com",
+            "https://api.ipify.org",
+            "https://checkip.amazonaws.com"
+        ])
+        timeout = server_config.get('public_ip_timeout', 5)
+        
+        for service_url in services:
+            try:
+                logger_manager.debug(f"尝试从 {service_url} 获取外网IP")
+                response = requests.get(service_url, timeout=timeout)
+                if response.status_code == 200:
+                    # 处理不同服务的响应格式
+                    if 'httpbin.org' in service_url:
+                        # httpbin返回JSON格式: {"origin": "1.2.3.4"}
+                        ip = response.json().get('origin', '').strip()
+                    else:
+                        # 其他服务直接返回IP地址
+                        ip = response.text.strip()
+                    
+                    # 验证IP格式
+                    if self._is_valid_ip(ip):
+                        logger_manager.debug(f"成功获取外网IP: {ip}")
+                        return ip
+                    else:
+                        logger_manager.debug(f"无效的IP格式: {ip}")
+                        
+            except requests.exceptions.Timeout:
+                logger_manager.debug(f"请求超时: {service_url}")
+                continue
+            except requests.exceptions.RequestException as e:
+                logger_manager.debug(f"请求失败: {service_url}, 错误: {str(e)}")
+                continue
+            except Exception as e:
+                logger_manager.debug(f"获取外网IP异常: {service_url}, 错误: {str(e)}")
+                continue
+        
+        logger_manager.debug("所有外网IP服务都无法访问")
+        return ""
+    
+    def _get_private_ip(self) -> str:
+        """
+        获取内网IP地址
+        
+        Returns:
+            内网IP地址
         """
         try:
             # 通过连接到外部地址来获取本机IP（不会真正发送数据）
@@ -185,6 +280,27 @@ class DingTalkNotifier:
             except Exception:
                 # 最后备用：返回127.0.0.1
                 return "127.0.0.1"
+    
+    def _is_valid_ip(self, ip: str) -> bool:
+        """
+        验证IP地址格式
+        
+        Args:
+            ip: IP地址字符串
+            
+        Returns:
+            是否为有效的IP地址
+        """
+        try:
+            parts = ip.split('.')
+            if len(parts) != 4:
+                return False
+            for part in parts:
+                if not (0 <= int(part) <= 255):
+                    return False
+            return True
+        except (ValueError, AttributeError):
+            return False
     
     def send_alert(self, metric: str, current_value: float, 
                    threshold: float, hostname: str) -> bool:

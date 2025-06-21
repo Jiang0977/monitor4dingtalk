@@ -5,6 +5,28 @@ dingtalk:
   secret: "YOUR_SECRET_KEY"  # 钉钉机器人的加密secret
   timeout: 10  # 请求超时时间（秒）
 
+# 服务器信息配置
+server:
+  # IP地址获取方式：auto, public, private, manual
+  # auto: 自动获取（先尝试外网IP，失败则用内网IP）
+  # public: 强制获取外网IP
+  # private: 强制获取内网IP
+  # manual: 手动指定IP地址
+  ip_mode: "auto"
+  
+  # 手动指定的IP地址（当ip_mode为manual时使用）
+  manual_ip: ""
+  
+  # 外网IP获取服务（按优先级排序）
+  public_ip_services:
+    - "https://ipv4.icanhazip.com"
+    - "https://api.ipify.org"
+    - "https://checkip.amazonaws.com"
+    - "https://httpbin.org/ip"
+  
+  # 外网IP获取超时时间（秒）
+  public_ip_timeout: 5
+
 # 监控配置
 monitor:
   interval: 60  # 监控间隔（秒）
