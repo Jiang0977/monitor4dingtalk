@@ -9,6 +9,7 @@ import hashlib
 import base64
 import urllib.parse
 import requests
+import socket
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -94,12 +95,16 @@ class DingTalkNotifier:
         # 格式化时间戳
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
+        # 获取服务器IP地址
+        server_ip = self._get_server_ip()
+        
         # 确定告警级别
         level = self._determine_alert_level(current_value, threshold)
         
         # 替换模板变量
         message_text = template.format(
             hostname=hostname,
+            server_ip=server_ip,
             timestamp=timestamp,
             metric_name=self._get_metric_display_name(metric),
             current_value=f"{current_value:.2f}%",
@@ -156,6 +161,30 @@ class DingTalkNotifier:
             'network': '网络IO'
         }
         return metric_names.get(metric, metric)
+    
+    def _get_server_ip(self) -> str:
+        """
+        获取服务器IP地址
+        
+        Returns:
+            服务器IP地址
+        """
+        try:
+            # 通过连接到外部地址来获取本机IP（不会真正发送数据）
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                # 使用Google的DNS服务器地址
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                return ip
+        except Exception:
+            try:
+                # 备用方法：获取本机hostname对应的IP
+                hostname = socket.gethostname()
+                ip = socket.gethostbyname(hostname)
+                return ip
+            except Exception:
+                # 最后备用：返回127.0.0.1
+                return "127.0.0.1"
     
     def send_alert(self, metric: str, current_value: float, 
                    threshold: float, hostname: str) -> bool:
@@ -225,14 +254,14 @@ class DingTalkNotifier:
             连接是否成功
         """
         try:
-            import socket
             hostname = socket.gethostname()
+            server_ip = self._get_server_ip()
             
             # 发送测试消息
             test_message = {
                 "msgtype": "text",
                 "text": {
-                    "content": f"Monitor4DingTalk 测试消息\n主机: {hostname}\n时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    "content": f"Monitor4DingTalk 测试消息\n主机: {hostname}\nIP地址: {server_ip}\n时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 }
             }
             

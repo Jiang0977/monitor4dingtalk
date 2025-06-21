@@ -232,6 +232,7 @@ alert:
     🚨 服务器资源告警
     
     **服务器**: {hostname}
+    **IP地址**: {server_ip}
     **时间**: {timestamp}
     **告警项**: {metric_name}
     **当前值**: {current_value}

@@ -232,6 +232,7 @@ alert:
     🚨 Server Resource Alert
     
     **Server**: {hostname}
+    **IP Address**: {server_ip}
     **Time**: {timestamp}
     **Alert Item**: {metric_name}
     **Current Value**: {current_value}
