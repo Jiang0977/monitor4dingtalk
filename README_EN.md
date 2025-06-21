@@ -233,7 +233,7 @@ monitor:
 
 ```yaml
 alert:
-  dedup_window: 300  # Alert deduplication time window (seconds)
+  dedup_window: 600  # Alert deduplication time window (seconds)
   message_template: |  # Custom alert message template
     🚨 Server Resource Alert
     

@@ -57,7 +57,7 @@ monitor:
 # 告警配置
 alert:
   # 告警去重时间窗口（秒）
-  dedup_window: 300
+  dedup_window: 600
   
   # 告警消息模板
   message_template: |

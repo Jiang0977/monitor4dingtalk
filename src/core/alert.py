@@ -21,7 +21,7 @@ class AlertEngine:
         self.alert_config = config_manager.get_alert_config()
         
         # 告警去重时间窗口（秒）
-        self.dedup_window = self.alert_config.get('dedup_window', 300)
+        self.dedup_window = self.alert_config.get('dedup_window', 600)
         
         # 存储已发送的告警，用于去重
         # 格式: {metric_name: timestamp}
