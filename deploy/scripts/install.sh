@@ -28,7 +28,7 @@ PYTHON_CMD=""
 for cmd in python3 python; do
     if command -v "$cmd" &>/dev/null; then
         version=$($cmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
-        if [[ "$version" > "3.7" ]]; then
+        if [[ "$version" > "3.5" ]]; then
             PYTHON_CMD="$cmd"
             echo -e "${GREEN}✅ 使用Python: $cmd ($version)${NC}"
             break
@@ -37,7 +37,7 @@ for cmd in python3 python; do
 done
 
 if [[ -z "$PYTHON_CMD" ]]; then
-    echo -e "${RED}❌ 需要Python 3.8+${NC}"
+    echo -e "${RED}❌ 需要Python 3.6+${NC}"
     exit 1
 fi
 

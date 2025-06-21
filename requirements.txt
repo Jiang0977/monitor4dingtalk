@@ -1,15 +1,15 @@
-# 系统资源监控核心库
-psutil>=5.8.0
+# 系统资源监控核心库（兼容Python 3.6+）
+psutil>=5.4.3
 
-# 配置文件解析
-PyYAML>=5.4.0
+# 配置文件解析（兼容Python 3.6+）
+PyYAML>=3.12
 
-# HTTP请求处理
-requests>=2.25.0
+# HTTP请求处理（兼容Python 3.6+）
+requests>=2.20.0
 
-# 任务调度
-schedule>=1.1.0
+# 任务调度（兼容Python 3.6+）
+schedule>=1.0.0
 
-# 开发和测试工具
-pytest>=6.0.0
-pytest-cov>=3.0.0 
+# 开发和测试工具（兼容Python 3.6+）
+pytest>=4.0.0
+pytest-cov>=2.6.0 

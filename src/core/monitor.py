@@ -6,22 +6,34 @@
 import psutil
 import socket
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
 from datetime import datetime
 
 from ..services.config import config_manager
 from ..services.logger import logger_manager
 
 
-@dataclass
 class MonitorData:
     """监控数据结构"""
-    metric: str           # 监控指标名称
-    value: float          # 当前值
-    threshold: float      # 阈值
-    unit: str            # 单位
-    timestamp: datetime   # 时间戳
-    hostname: str        # 主机名
+    
+    def __init__(self, metric: str, value: float, threshold: float, 
+                 unit: str, timestamp: datetime, hostname: str):
+        """
+        初始化监控数据
+        
+        Args:
+            metric: 监控指标名称
+            value: 当前值
+            threshold: 阈值
+            unit: 单位
+            timestamp: 时间戳
+            hostname: 主机名
+        """
+        self.metric = metric
+        self.value = value
+        self.threshold = threshold
+        self.unit = unit
+        self.timestamp = timestamp
+        self.hostname = hostname
     
     @property
     def is_alert(self) -> bool:

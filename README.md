@@ -45,7 +45,7 @@ Monitor4DingTalk/
 
 ### 环境要求
 
-- Python 3.8+
+- Python 3.6+
 - Linux/macOS/Windows (推荐Linux)
 
 ### 开发环境安装
@@ -139,7 +139,7 @@ sudo systemctl restart monitor4dingtalk
 
 ### 方式二：手动部署
 
-详细的手动部署步骤请参考 [生产环境部署指南](deploy/production-deployment.md)
+详细的手动部署步骤请参考 [生产环境部署指南](deploy/README.md)
 
 ### 方式三：Docker部署
 

@@ -2,7 +2,16 @@
 
 本目录包含了Monitor4DingTalk的简化部署脚本，专注于快速安装和使用。
 
-## 快速安装
+## 系统要求
+
+- **操作系统**: Linux (推荐 CentOS 7+/Ubuntu 16.04+)
+- **Python版本**: 3.6+ (兼容Python 3.6、3.7、3.8、3.9、3.10等)
+- **权限**: root 或 sudo 权限（用于系统服务安装）
+- **网络**: 需要访问钉钉API和外网（用于安装依赖包）
+
+## 快速部署
+
+### 方法一：自动安装脚本（推荐）
 
 ### 1. 环境检查
 ```bash
@@ -75,12 +84,6 @@ python3 src/main.py --status
 # 卸载Monitor4DingTalk
 sudo bash deploy/scripts/simple_uninstall.sh
 ```
-
-## 系统要求
-
-- Python 3.8+
-- 系统管理员权限（sudo）
-- 网络连接（能访问钉钉API）
 
 ## 配置说明
 

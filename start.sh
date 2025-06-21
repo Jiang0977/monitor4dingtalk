@@ -26,13 +26,13 @@ check_python() {
     
     # 尝试多个Python命令，优先使用高版本
     PYTHON_CMD=""
-    for cmd in python python3 python3.10 python3.9 python3.8 /root/miniconda3/bin/python /root/anaconda3/bin/python; do
+    for cmd in python python3 python3.10 python3.9 python3.8 python3.7 python3.6 /root/miniconda3/bin/python /root/anaconda3/bin/python; do
         if command -v "$cmd" &> /dev/null; then
             version_output=$($cmd --version 2>&1)
             if [[ $version_output =~ Python\ ([0-9]+)\.([0-9]+) ]]; then
                 major=${BASH_REMATCH[1]}
                 minor=${BASH_REMATCH[2]}
-                if [[ $major -gt 3 || ($major -eq 3 && $minor -ge 8) ]]; then
+                if [[ $major -gt 3 || ($major -eq 3 && $minor -ge 6) ]]; then
                     PYTHON_CMD="$cmd"
                     python_version="$major.$minor"
                     echo -e "${GREEN}✅ 使用Python: $python_version (路径: $(which $cmd 2>/dev/null || echo $cmd))${NC}"
@@ -43,7 +43,7 @@ check_python() {
     done
     
     if [[ -z "$PYTHON_CMD" ]]; then
-        echo -e "${RED}❌ 未找到Python 3.8+版本${NC}"
+        echo -e "${RED}❌ 未找到Python 3.6+版本${NC}"
         echo "当前系统可用的Python版本："
         for cmd in python python3; do
             if command -v "$cmd" &> /dev/null; then
