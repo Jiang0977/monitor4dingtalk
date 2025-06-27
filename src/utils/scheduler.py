@@ -48,12 +48,11 @@ class MonitorScheduler:
         try:
             logger_manager.debug("开始执行监控任务")
             
-            # 收集需要告警的指标
-            alert_metrics = resource_monitor.get_alert_metrics()
+            # 收集所有指标
+            all_metrics = resource_monitor.collect_all_metrics()
             
-            # 处理告警
-            if alert_metrics:
-                alert_engine.process_alerts(alert_metrics)
+            # 交由告警引擎处理
+            alert_engine.check_and_process(all_metrics)
             
             logger_manager.debug("监控任务执行完成")
             
@@ -163,7 +162,7 @@ class MonitorScheduler:
             try:
                 next_run = job.next_run.strftime('%Y-%m-%d %H:%M:%S') if job.next_run else 'N/A'
                 jobs_info.append({
-                    'job_func': job.job_func.__name__ if hasattr(job.job_func, '__name__') else str(job.job_func),
+                    'job_func': str(job.job_func),
                     'interval': str(job.interval),
                     'unit': job.unit,
                     'next_run': next_run

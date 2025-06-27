@@ -99,21 +99,29 @@ class Monitor4DingTalk:
         print("📊 当前系统资源状态:")
         print("-" * 50)
         
+        alert_candidates = []
         for metric_data in all_metrics:
-            status = "🔴 告警" if metric_data.is_alert else "✅ 正常"
+            status = "🔴 关注" if metric_data.is_alert else "✅ 正常"
             print(f"{metric_data.metric}: {metric_data.value:.2f}{metric_data.unit} "
-                  f"(阈值: {metric_data.threshold:.2f}{metric_data.unit}) {status}")
-        
-        # 处理告警
-        alert_metrics = [m for m in all_metrics if m.is_alert]
-        if alert_metrics:
-            print(f"\n🚨 发现 {len(alert_metrics)} 个告警指标，正在发送告警...")
-            results = alert_engine.process_alerts(alert_metrics)
-            
+                  f"(阈值: {metric_data.threshold:.2f}{metric_data.unit}) - {status}")
+            if metric_data.is_alert:
+                alert_candidates.append(metric_data)
+
+        # 即使是单次运行，也通过告警引擎处理，以应用连续次数和恢复逻辑
+        print("\n⚙️  正在通过告警引擎分析...")
+        # 注意：在--once模式下，连续检测和恢复通知可能不会按预期工作，
+        # 因为它只执行一次。但为了逻辑统一，我们仍然使用新流程。
+        results = alert_engine.check_and_process(all_metrics)
+
+        if results:
             success_count = sum(1 for success in results.values() if success)
-            print(f"告警发送完成: 成功 {success_count}/{len(alert_metrics)}")
+            print(f"\n🚨 告警发送完成: 成功 {success_count}/{len(results)}")
         else:
-            print("\n✅ 所有指标正常，无需告警")
+            # 需要检查是否有恢复的告警
+            if not any(m.is_alert for m in all_metrics):
+                 print("\n✅ 所有指标正常，无需告警")
+            else:
+                 print("\n🟡 指标超标，但未达到连续告警阈值，本次不发送告警")
     
     def show_status(self):
         """显示系统状态"""

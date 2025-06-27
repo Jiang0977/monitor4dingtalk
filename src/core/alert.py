@@ -4,7 +4,7 @@
 """
 
 import time
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Any
 from datetime import datetime, timedelta
 
 from .monitor import MonitorData
@@ -23,12 +23,18 @@ class AlertEngine:
         # 告警去重时间窗口（秒）
         self.dedup_window = self.alert_config.get('dedup_window', 600)
         
+        # 连续N次超阈值才告警
+        self.consecutive_checks_threshold = self.alert_config.get('consecutive_checks', 1)
+        
         # 存储已发送的告警，用于去重
         # 格式: {metric_name: timestamp}
         self._sent_alerts: Dict[str, float] = {}
         
         # 存储持续告警的指标，用于状态跟踪
         self._persistent_alerts: Set[str] = set()
+        
+        # 存储指标连续超阈值的次数
+        self._consecutive_counts: Dict[str, int] = {}
     
     def should_send_alert(self, monitor_data: MonitorData) -> bool:
         """
@@ -40,14 +46,6 @@ class AlertEngine:
         Returns:
             是否应该发送告警
         """
-        # 检查是否超过阈值
-        if not monitor_data.is_alert:
-            # 如果指标恢复正常，从持续告警集合中移除
-            if monitor_data.metric in self._persistent_alerts:
-                self._persistent_alerts.remove(monitor_data.metric)
-                logger_manager.info(f"告警恢复: {monitor_data.metric} 当前值: {monitor_data.value:.2f}%")
-            return False
-        
         # 检查去重时间窗口
         current_time = time.time()
         metric_name = monitor_data.metric
@@ -75,12 +73,7 @@ class AlertEngine:
             return True
         
         # 发送告警
-        success = dingtalk_notifier.send_alert(
-            metric=monitor_data.metric,
-            current_value=monitor_data.value,
-            threshold=monitor_data.threshold,
-            hostname=monitor_data.hostname
-        )
+        success = dingtalk_notifier.send_alert(monitor_data)
         
         if success:
             # 记录告警发送时间
@@ -95,6 +88,51 @@ class AlertEngine:
         
         return success
     
+    def check_and_process(self, all_metrics: List[MonitorData]) -> Dict[str, bool]:
+        """
+        检查所有指标并处理告警
+        
+        Args:
+            all_metrics: 所有监控数据列表
+            
+        Returns:
+            告警处理结果字典 {metric_name: success}
+        """
+        alert_metrics_to_process = []
+
+        for metric_data in all_metrics:
+            metric_name = metric_data.metric
+
+            if metric_data.is_alert:
+                # 指标超阈值，增加连续次数
+                self._consecutive_counts[metric_name] = self._consecutive_counts.get(metric_name, 0) + 1
+                logger_manager.debug(f"指标持续超标: {metric_name} "
+                                     f"(当前值: {metric_data.value:.2f}%), "
+                                     f"连续次数: {self._consecutive_counts[metric_name]}/{self.consecutive_checks_threshold}")
+            else:
+                # 指标恢复正常
+                if metric_name in self._persistent_alerts:
+                    # 如果之前是告警状态，则发送恢复通知
+                    logger_manager.info(f"告警恢复: {metric_name} 当前值: {metric_data.value:.2f}%")
+                    dingtalk_notifier.send_recovery_notification(metric_data)
+                    self._persistent_alerts.remove(metric_name)
+                    # 从去重记录中移除，以便下次能立即告警
+                    if metric_name in self._sent_alerts:
+                        del self._sent_alerts[metric_name]
+                
+                # 重置连续次数
+                self._consecutive_counts[metric_name] = 0
+
+            # 检查是否达到告警条件
+            if self._consecutive_counts.get(metric_name, 0) >= self.consecutive_checks_threshold:
+                alert_metrics_to_process.append(metric_data)
+
+        if not alert_metrics_to_process:
+            logger_manager.debug("没有需要处理的告警")
+            return {}
+
+        return self.process_alerts(alert_metrics_to_process)
+
     def process_alerts(self, alert_metrics: List[MonitorData]) -> Dict[str, bool]:
         """
         批量处理告警
@@ -111,7 +149,7 @@ class AlertEngine:
             logger_manager.debug("没有需要处理的告警")
             return results
         
-        logger_manager.info(f"开始处理 {len(alert_metrics)} 个告警")
+        logger_manager.info(f"开始处理 {len(alert_metrics)} 个确认的告警")
         
         for monitor_data in alert_metrics:
             try:
@@ -146,7 +184,7 @@ class AlertEngine:
         if expired_alerts:
             logger_manager.debug(f"清理了 {len(expired_alerts)} 个过期告警记录")
     
-    def get_alert_status(self) -> Dict[str, any]:
+    def get_alert_status(self) -> Dict[str, Any]:
         """
         获取告警状态信息
         
@@ -169,7 +207,9 @@ class AlertEngine:
             'total_sent_alerts': len(self._sent_alerts),
             'active_alerts': active_alerts,
             'persistent_alerts': list(self._persistent_alerts),
-            'dedup_window': self.dedup_window
+            'dedup_window': self.dedup_window,
+            'consecutive_checks_threshold': self.consecutive_checks_threshold,
+            'consecutive_counts': self._consecutive_counts
         }
         
         return status
@@ -186,16 +226,12 @@ class AlertEngine:
         """
         logger_manager.info(f"强制发送告警: {monitor_data.metric}")
         
-        success = dingtalk_notifier.send_alert(
-            metric=monitor_data.metric,
-            current_value=monitor_data.value,
-            threshold=monitor_data.threshold,
-            hostname=monitor_data.hostname
-        )
+        success = dingtalk_notifier.send_alert(monitor_data)
         
         if success:
             self._sent_alerts[monitor_data.metric] = time.time()
             self._persistent_alerts.add(monitor_data.metric)
+            self._consecutive_counts[monitor_data.metric] = self.consecutive_checks_threshold
         
         return success
     
@@ -203,6 +239,7 @@ class AlertEngine:
         """重置告警历史记录"""
         self._sent_alerts.clear()
         self._persistent_alerts.clear()
+        self._consecutive_counts.clear()
         logger_manager.info("告警历史记录已重置")
 
 

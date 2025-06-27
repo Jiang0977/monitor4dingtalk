@@ -10,11 +10,14 @@ import base64
 import urllib.parse
 import requests
 import socket
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from datetime import datetime
 
 from .config import config_manager
 from .logger import logger_manager
+
+if TYPE_CHECKING:
+    from ..core.monitor import MonitorData
 
 
 class DingTalkNotifier:
@@ -121,6 +124,58 @@ class DingTalkNotifier:
             },
             "at": {
                 "atAll": False
+            }
+        }
+        
+        return message
+    
+    def _format_recovery_message(self, monitor_data: 'MonitorData') -> Dict[str, Any]:
+        """
+        格式化告警恢复消息
+        
+        Args:
+            monitor_data: 监控数据
+            
+        Returns:
+            格式化的消息体
+        """
+        alert_config = config_manager.get_alert_config()
+        template = alert_config.get('recovery_message_template', '')
+        
+        # 如果没有配置恢复模板，则使用默认模板
+        if not template:
+            template = """
+✅ **告警恢复通知**
+
+**服务器**: {hostname}
+**IP 地址**: {server_ip}
+**恢复时间**: {timestamp}
+**监控项**: {metric_name}
+**当前值**: {current_value} (已恢复正常)
+"""
+        
+        # 格式化时间戳
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        # 获取服务器IP地址
+        server_ip = self._get_server_ip()
+        
+        # 替换模板变量
+        message_text = template.format(
+            hostname=monitor_data.hostname,
+            server_ip=server_ip,
+            timestamp=timestamp,
+            metric_name=self._get_metric_display_name(monitor_data.metric),
+            current_value=f"{monitor_data.value:.2f}{monitor_data.unit}",
+            threshold=f"{monitor_data.threshold:.2f}{monitor_data.unit}"
+        )
+        
+        # 构建钉钉消息体
+        message = {
+            "msgtype": "markdown",
+            "markdown": {
+                "title": f"告警恢复 - {monitor_data.hostname}",
+                "text": message_text
             }
         }
         
@@ -302,66 +357,93 @@ class DingTalkNotifier:
         except (ValueError, AttributeError):
             return False
     
-    def send_alert(self, metric: str, current_value: float, 
-                   threshold: float, hostname: str) -> bool:
+    def _send_message(self, message: Dict[str, Any], metric_name: str) -> bool:
         """
-        发送告警消息
+        通用消息发送方法
         
         Args:
-            metric: 监控指标名称
-            current_value: 当前值
-            threshold: 阈值
-            hostname: 主机名
-            
+            message: 消息体
+            metric_name: 监控指标名称 (用于日志)
+        
         Returns:
             发送是否成功
         """
         try:
-            # 检查配置
             if not self.webhook_url:
                 logger_manager.error("钉钉Webhook URL未配置")
                 return False
-            
-            # 构建请求URL
+
             url = self._build_webhook_url()
-            
-            # 格式化消息
-            message = self._format_alert_message(metric, current_value, threshold, hostname)
-            
-            # 发送请求
-            logger_manager.debug(f"发送钉钉告警消息: {message}")
-            
+            logger_manager.debug(f"发送钉钉消息: {message}")
+
             response = requests.post(
                 url,
                 json=message,
                 timeout=self.timeout,
                 headers={'Content-Type': 'application/json'}
             )
-            
-            # 检查响应
+
             if response.status_code == 200:
                 result = response.json()
                 if result.get('errcode') == 0:
-                    logger_manager.log_alert_sent(metric, current_value, threshold)
                     return True
                 else:
                     error_msg = result.get('errmsg', '未知错误')
-                    logger_manager.log_alert_failed(metric, f"钉钉API错误: {error_msg}")
+                    logger_manager.log_alert_failed(metric_name, f"钉钉API错误: {error_msg}")
                     return False
             else:
-                logger_manager.log_alert_failed(metric, f"HTTP错误: {response.status_code}")
+                logger_manager.log_alert_failed(metric_name, f"HTTP错误: {response.status_code}")
                 return False
-                
+
         except requests.exceptions.Timeout:
-            logger_manager.log_alert_failed(metric, "请求超时")
+            logger_manager.log_alert_failed(metric_name, "请求超时")
             return False
         except requests.exceptions.RequestException as e:
-            logger_manager.log_alert_failed(metric, f"网络错误: {str(e)}")
+            logger_manager.log_alert_failed(metric_name, f"网络错误: {str(e)}")
             return False
         except Exception as e:
-            logger_manager.log_alert_failed(metric, f"发送失败: {str(e)}")
+            logger_manager.log_alert_failed(metric_name, f"发送失败: {str(e)}")
             return False
-    
+
+    def send_alert(self, monitor_data: 'MonitorData') -> bool:
+        """
+        发送告警消息
+        
+        Args:
+            monitor_data: 监控数据对象
+            
+        Returns:
+            发送是否成功
+        """
+        message = self._format_alert_message(
+            metric=monitor_data.metric,
+            current_value=monitor_data.value,
+            threshold=monitor_data.threshold,
+            hostname=monitor_data.hostname
+        )
+        success = self._send_message(message, monitor_data.metric)
+        if success:
+            logger_manager.log_alert_sent(
+                monitor_data.metric, monitor_data.value, monitor_data.threshold
+            )
+        return success
+
+    def send_recovery_notification(self, monitor_data: 'MonitorData') -> bool:
+        """
+        发送告警恢复通知
+        
+        Args:
+            monitor_data: 监控数据对象
+            
+        Returns:
+            发送是否成功
+        """
+        message = self._format_recovery_message(monitor_data)
+        success = self._send_message(message, monitor_data.metric)
+        if success:
+            logger_manager.info(f"告警恢复通知已发送 - {monitor_data.metric}")
+        return success
+
     def test_connection(self) -> bool:
         """
         测试钉钉连接

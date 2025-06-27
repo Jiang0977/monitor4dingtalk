@@ -12,7 +12,7 @@ Server resource monitoring and DingTalk alert system - Provides 24/7 server reso
 - 🖥️ **Multi-metric Monitoring**: Real-time monitoring of CPU, memory, and disk usage
 - 📱 **DingTalk Alerts**: Support for DingTalk robot message push with encryption signature
 - ⚙️ **Flexible Configuration**: YAML configuration file with customizable thresholds and monitoring frequency
-- 🔄 **Smart Deduplication**: Avoid duplicate alerts with alert recovery notifications
+- 🔄 **Smart Alerting**: Filters transient spikes with consecutive threshold checks, includes alert deduplication and recovery notifications to prevent alert fatigue.
 - 📊 **Detailed Logging**: Complete monitoring logs and alert history
 - 🎯 **Lightweight**: Python-based, low resource usage, simple deployment
 
@@ -234,6 +234,12 @@ monitor:
 ```yaml
 alert:
   dedup_window: 600  # Alert deduplication time window (seconds)
+  
+  # Number of consecutive checks exceeding the threshold to trigger an alert.
+  # Set to 3 to trigger an alert only if a metric is high for 3 consecutive checks.
+  # Set to 1 to disable this feature and alert immediately.
+  consecutive_checks: 3
+
   message_template: |  # Custom alert message template
     🚨 Server Resource Alert
     
@@ -244,6 +250,15 @@ alert:
     **Current Value**: {current_value}
     **Alert Threshold**: {threshold}
     **Alert Level**: {level}
+
+  recovery_message_template: | # Custom recovery message template
+    ✅ Alert Recovery Notification
+    
+    **Server**: {hostname}
+    **IP Address**: {server_ip}
+    **Recovery Time**: {timestamp}
+    **Metric**: {metric_name}
+    **Current Value**: {current_value} (Back to normal)
 ```
 
 ### IP Address Acquisition Mode Description
@@ -258,6 +273,7 @@ alert:
 - **Monitoring Interval**: 30-60 seconds (avoid too frequent)
 - **Alert Thresholds**: CPU 80%, Memory 85%, Disk 90%
 - **Deduplication Window**: 10 minutes (avoid alert bombardment)
+- **Consecutive Checks**: 3-5 (adjust based on monitoring interval to prevent false positives)
 - **Log Level**: INFO (production environment)
 - **IP Mode**: auto (recommended) or public (if public IP needed)
 
